@@ -719,6 +719,8 @@
 
                 // 編集可能なdivのイベントリスナー
                 if (editableDisplay) {
+                    let isComposing = false;
+
                     // テキスト選択時のコメント追加ボタン表示
                     editableDisplay.addEventListener('mouseup', function(e) {
                         handleTextSelection(e, entry.id, editableDisplay);
@@ -733,8 +735,25 @@
                         }
                     });
 
+                    // IME入力開始
+                    editableDisplay.addEventListener('compositionstart', function() {
+                        isComposing = true;
+                    });
+
+                    // IME入力終了
+                    editableDisplay.addEventListener('compositionend', function() {
+                        isComposing = false;
+                        // IME確定後にデータを更新
+                        const plainText = getPlainTextWithoutIcons(this);
+                        textarea.value = plainText;
+                        handleTextChange(index, plainText);
+                    });
+
                     // 入力イベント - プレーンテキストのみ更新
                     editableDisplay.addEventListener('input', function() {
+                        // IME入力中はスキップ
+                        if (isComposing) return;
+
                         // コメントアイコンを除外してプレーンテキストを取得
                         const plainText = getPlainTextWithoutIcons(this);
                         textarea.value = plainText;
@@ -763,12 +782,6 @@
                                 llmDisplay.innerHTML = newHighlightedLLMText;
                             }
                         }
-                    });
-
-                    // フォーカス時は編集しやすいようにプレーンテキストに変換
-                    editableDisplay.addEventListener('focus', function() {
-                        const plainText = getPlainTextWithoutIcons(this);
-                        this.textContent = plainText;
                     });
                 }
             });
@@ -887,6 +900,77 @@
             const icons = cloned.querySelectorAll('.comment-icon');
             icons.forEach(icon => icon.remove());
             return cloned.textContent || cloned.innerText || '';
+        }
+
+        // カーソル位置を取得（プレーンテキストからのオフセット）
+        function getCursorPosition(element) {
+            const selection = window.getSelection();
+            if (selection.rangeCount === 0) return 0;
+
+            const range = selection.getRangeAt(0);
+            const preCaretRange = range.cloneRange();
+            preCaretRange.selectNodeContents(element);
+            preCaretRange.setEnd(range.endContainer, range.endOffset);
+
+            // クローンした範囲のテキストを取得
+            const tempDiv = document.createElement('div');
+            tempDiv.appendChild(preCaretRange.cloneContents());
+            return getPlainTextWithoutIcons(tempDiv).length;
+        }
+
+        // カーソル位置を復元
+        function restoreCursorPosition(element, offset) {
+            try {
+                const selection = window.getSelection();
+                const range = document.createRange();
+
+                let currentOffset = 0;
+                let found = false;
+
+                function findPosition(node) {
+                    if (found) return;
+
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        const textLength = node.textContent.length;
+                        if (currentOffset + textLength >= offset) {
+                            const nodeOffset = offset - currentOffset;
+                            range.setStart(node, Math.min(nodeOffset, textLength));
+                            range.collapse(true);
+                            found = true;
+                            return;
+                        }
+                        currentOffset += textLength;
+                    } else if (node.nodeType === Node.ELEMENT_NODE) {
+                        // コメントアイコンはスキップ
+                        if (!node.classList || !node.classList.contains('comment-icon')) {
+                            for (let child of node.childNodes) {
+                                findPosition(child);
+                                if (found) return;
+                            }
+                        }
+                    }
+                }
+
+                findPosition(element);
+
+                if (found) {
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                }
+            } catch (e) {
+                // カーソル位置復元に失敗した場合は無視
+                console.warn('Failed to restore cursor position:', e);
+            }
+        }
+
+        // 次の編集可能要素を見つける
+        function findNextEditableElement(currentElement) {
+            const allEditables = Array.from(document.querySelectorAll('.editable-display'));
+            const currentIndex = allEditables.indexOf(currentElement);
+            if (currentIndex >= 0 && currentIndex < allEditables.length - 1) {
+                return allEditables[currentIndex + 1];
+            }
+            return null;
         }
 
         // コメントアイコンを挿入する関数
