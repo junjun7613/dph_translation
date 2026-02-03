@@ -188,6 +188,7 @@ class TranslationEditorHandler(SimpleHTTPRequestHandler):
 
             original_path = data.get('originalPath')
             csv_content = data.get('csvContent')
+            comments_data = data.get('commentsData')  # コメントデータも受け取る
 
             if not original_path or not csv_content:
                 self.send_response(400)
@@ -215,6 +216,7 @@ class TranslationEditorHandler(SimpleHTTPRequestHandler):
                 # ファイル名と拡張子を分離
                 file_stem = original_file.stem
                 file_dir = original_file.parent
+                folder_name = original_file.parent.name
 
             # 現在の日時を取得（YYYYMMDD_HHMMSS形式）
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -228,9 +230,11 @@ class TranslationEditorHandler(SimpleHTTPRequestHandler):
                 # 既に編集済みファイルの場合、元の名前を維持して日時のみ更新
                 base_name = match.group(1)
                 new_filename = f"{base_name}_edited_{timestamp}.csv"
+                new_file_stem = f"{base_name}_edited_{timestamp}"
             else:
                 # 初めての編集の場合
                 new_filename = f"{file_stem}_edited_{timestamp}.csv"
+                new_file_stem = f"{file_stem}_edited_{timestamp}"
 
             new_file_path = file_dir / new_filename
 
@@ -241,6 +245,15 @@ class TranslationEditorHandler(SimpleHTTPRequestHandler):
                 # CSVファイルを保存
                 with open(new_file_path, 'w', encoding='utf-8') as f:
                     f.write(csv_content)
+
+                # コメントデータも新しいファイル名で保存
+                if comments_data:
+                    comments_dir = file_dir / 'comments'
+                    comments_dir.mkdir(parents=True, exist_ok=True)
+                    comments_file = comments_dir / f'{new_file_stem}.json'
+
+                    with open(comments_file, 'w', encoding='utf-8') as f:
+                        json.dump(comments_data, f, ensure_ascii=False, indent=2)
 
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')

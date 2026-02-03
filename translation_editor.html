@@ -552,8 +552,10 @@
 
         async function loadComments(filePath) {
             try {
+                console.log('Loading comments for:', filePath);
                 const response = await fetch(`/api/comments/${filePath}`);
                 const data = await response.json();
+                console.log('Loaded comments:', data);
                 commentsData = data || {};
             } catch (error) {
                 console.error('コメントデータの読み込みに失敗しました:', error);
@@ -563,6 +565,15 @@
 
         async function saveComments() {
             try {
+                // コメントデータから一時フラグを削除してクリーンなデータを作成
+                const cleanCommentsData = {};
+                for (const entryId in commentsData) {
+                    cleanCommentsData[entryId] = commentsData[entryId].map(comment => {
+                        const { _inserted, ...cleanComment } = comment;
+                        return cleanComment;
+                    });
+                }
+
                 const response = await fetch('/api/save-comments', {
                     method: 'POST',
                     headers: {
@@ -570,7 +581,7 @@
                     },
                     body: JSON.stringify({
                         filePath: currentFileName,
-                        commentsData: commentsData
+                        commentsData: cleanCommentsData
                     })
                 });
 
@@ -973,44 +984,74 @@
             return null;
         }
 
-        // コメントアイコンを挿入する関数
+        // コメントアイコンを挿入する関数（プレーンテキストのoffsetベース）
         function insertCommentIcons(htmlContent, entryId, plainText) {
             const comments = commentsData[entryId] || [];
             if (comments.length === 0) return htmlContent;
 
-            // HTMLをパースしてテキストノードとタグノードを分離
+            console.log('=== Insert Comment Icons ===');
+            console.log('Entry ID:', entryId);
+            console.log('Plain text:', plainText);
+            console.log('Plain text length:', plainText.length);
+            console.log('Comments:', comments);
+
+            // コメントをoffset順にソートし、_insertedフラグをクリア
+            const sortedComments = [...comments].sort((a, b) => a.offset - b.offset);
+            // 既存の_insertedフラグをすべてクリア
+            sortedComments.forEach(comment => {
+                delete comment._inserted;
+            });
+
+            // HTMLContentをパースして、プレーンテキスト位置を追跡しながらアイコンを挿入
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = htmlContent;
 
-            // プレーンテキストのoffset位置を計算しながらコメントアイコンを挿入
-            let currentOffset = 0;
+            let plainTextPos = 0; // 現在のプレーンテキスト位置
             const result = [];
 
             function processNode(node) {
                 if (node.nodeType === Node.TEXT_NODE) {
                     const text = node.textContent;
-                    let lastIndex = 0;
+                    let textPos = 0; // このテキストノード内の位置
 
-                    // このテキストノード内のコメント位置を探す
-                    comments.forEach((comment, commentIndex) => {
-                        if (comment.offset >= currentOffset && comment.offset < currentOffset + text.length) {
-                            const relativeOffset = comment.offset - currentOffset;
-                            if (relativeOffset > lastIndex) {
-                                result.push(escapeHtml(text.substring(lastIndex, relativeOffset)));
+                    console.log(`Processing text node at plainTextPos ${plainTextPos}: "${text.substring(0, 50)}..."`);
+
+                    while (textPos < text.length || plainTextPos < text.length + plainTextPos - textPos) {
+                        // この位置にコメントアイコンを挿入すべきか確認
+                        let foundComment = null;
+                        let foundIndex = -1;
+                        for (let i = 0; i < sortedComments.length; i++) {
+                            if (sortedComments[i].offset === plainTextPos && !sortedComments[i]._inserted) {
+                                foundComment = sortedComments[i];
+                                foundIndex = i;
+                                break;
                             }
-                            const tooltipText = comment.author ? `[${comment.author}] ${comment.comment}` : comment.comment;
-                            result.push(`<span class="comment-icon" data-comment-index="${commentIndex}" title="${escapeHtml(tooltipText)}">💬</span>`);
-                            lastIndex = relativeOffset;
                         }
-                    });
 
-                    if (lastIndex < text.length) {
-                        result.push(escapeHtml(text.substring(lastIndex)));
+                        if (foundComment) {
+                            // アイコンを挿入
+                            const tooltipText = foundComment.author
+                                ? `[${foundComment.author}] ${foundComment.comment}`
+                                : foundComment.comment;
+                            console.log(`Inserting icon at plainTextPos ${plainTextPos} for comment:`, foundComment);
+                            result.push(`<span class="comment-icon" data-comment-index="${foundIndex}" title="${escapeHtml(tooltipText)}">💬</span>`);
+                            foundComment._inserted = true;  // マークして二重挿入を防ぐ
+                        } else if (textPos < text.length) {
+                            // 通常の文字を追加
+                            result.push(escapeHtml(text[textPos]));
+                            textPos++;
+                            plainTextPos++;
+                        } else {
+                            // テキストノードの終端に達した
+                            break;
+                        }
                     }
-                    currentOffset += text.length;
                 } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    // 開始タグ
                     result.push(`<${node.tagName.toLowerCase()}${getAttributesString(node)}>`);
+                    // 子ノードを処理
                     Array.from(node.childNodes).forEach(child => processNode(child));
+                    // 終了タグ
                     result.push(`</${node.tagName.toLowerCase()}>`);
                 }
             }
@@ -1024,7 +1065,12 @@
             }
 
             Array.from(tempDiv.childNodes).forEach(node => processNode(node));
-            return result.join('');
+
+            const resultHtml = result.join('');
+            console.log('Final plainTextPos:', plainTextPos);
+            console.log('Result HTML length:', resultHtml.length);
+
+            return resultHtml;
         }
 
         // テキスト選択時の処理
@@ -1037,11 +1083,37 @@
             }
 
             const selection = window.getSelection();
-            const selectedText = selection.toString();
+            const selectedText = selection.toString().replace(/\u{1F4AC}/gu, ''); // 💬絵文字を除外
 
             if (selectedText.trim().length > 0) {
                 const range = selection.getRangeAt(0);
                 const rect = range.getBoundingClientRect();
+
+                // プレーンテキストを取得（差分ハイライトとコメントアイコンを除外）
+                const plainText = getPlainTextWithoutIcons(editableDisplay);
+
+                // 選択範囲の開始位置をプレーンテキストベースで計算（mouseup時に計算）
+                // 選択開始位置までのプレーンテキストの長さを取得
+                const tempRange = document.createRange();
+                tempRange.selectNodeContents(editableDisplay);
+                tempRange.setEnd(range.startContainer, range.startOffset);
+
+                const tempDiv = document.createElement('div');
+                tempDiv.appendChild(tempRange.cloneContents());
+                const textBeforeSelection = getPlainTextWithoutIcons(tempDiv);
+
+                const calculatedOffset = textBeforeSelection.length;
+                const calculatedLength = selectedText.length;
+
+                console.log('=== Comment Selection Debug (at mouseup) ===');
+                console.log('Entry ID:', entryId);
+                console.log('Plain text:', plainText);
+                console.log('Plain text length:', plainText.length);
+                console.log('Selected text:', selectedText);
+                console.log('Text before selection:', textBeforeSelection);
+                console.log('Calculated offset:', calculatedOffset);
+                console.log('Calculated length:', calculatedLength);
+                console.log('Text at offset:', plainText.substring(calculatedOffset, calculatedOffset + calculatedLength));
 
                 // コメント追加ボタンを表示
                 addCommentBtn = document.createElement('button');
@@ -1050,13 +1122,9 @@
                 addCommentBtn.style.top = `${rect.bottom + window.scrollY + 5}px`;
                 addCommentBtn.style.left = `${rect.left + window.scrollX}px`;
 
+                // 計算したオフセットとテキストをクロージャーに保存
                 addCommentBtn.onclick = function() {
-                    // 選択範囲のオフセットを計算
-                    const plainText = editableDisplay.innerText;
-                    const selectionStart = getTextOffset(editableDisplay, range.startContainer, range.startOffset);
-                    const selectionEnd = getTextOffset(editableDisplay, range.endContainer, range.endOffset);
-
-                    showAddCommentDialog(entryId, selectionStart, selectionEnd - selectionStart, selectedText);
+                    showAddCommentDialog(entryId, calculatedOffset, calculatedLength, selectedText);
                     addCommentBtn.remove();
                     addCommentBtn = null;
                     selection.removeAllRanges();
@@ -1066,32 +1134,110 @@
             }
         }
 
-        // DOMノードからテキストoffsetを計算
-        function getTextOffset(container, targetNode, targetOffset) {
-            let offset = 0;
+        // プレーンテキスト上でのオフセットを計算（コメントアイコンを除外）
+        function calculatePlainTextOffset(container, targetNode, targetOffset) {
+            console.log('=== calculatePlainTextOffset START ===');
+            console.log('Target node:', targetNode);
+            console.log('Target node type:', targetNode.nodeType);
+            console.log('Target offset:', targetOffset);
+
+            // ターゲットが要素ノードの場合、targetOffsetは子ノードのインデックス
+            // その子ノードの直前までのテキストをカウントする必要がある
+            if (targetNode.nodeType === Node.ELEMENT_NODE) {
+                console.log('Target is ELEMENT_NODE, finding child at index:', targetOffset);
+                // targetOffsetが0の場合、要素の最初の位置（子ノードの前）を意味する
+                // targetNode.childNodes[targetOffset]の直前までをカウント
+                let targetChildNode = targetNode.childNodes[targetOffset];
+                console.log('Target child node at index:', targetChildNode);
+
+                let plainTextOffset = 0;
+                let found = false;
+
+                function traverse(node) {
+                    if (found) return;
+
+                    // ターゲットの子ノードに到達した場合、そこで停止
+                    if (node === targetChildNode) {
+                        console.log(`Found target child node! Stopping at plainTextOffset=${plainTextOffset}`);
+                        found = true;
+                        return;
+                    }
+
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        const textLength = node.textContent.length;
+                        console.log(`Text node: adding ${textLength} chars. plainTextOffset: ${plainTextOffset} -> ${plainTextOffset + textLength}`);
+                        plainTextOffset += textLength;
+                    } else if (node.nodeType === Node.ELEMENT_NODE) {
+                        // コメントアイコンは完全にスキップ
+                        if (node.classList && node.classList.contains('comment-icon')) {
+                            console.log('Skipping comment icon');
+                            return;
+                        }
+                        // 差分ハイライトは通過してテキストをカウント
+                        for (let child of node.childNodes) {
+                            traverse(child);
+                            if (found) return;
+                        }
+                    }
+                }
+
+                for (let child of targetNode.childNodes) {
+                    traverse(child);
+                    if (found) break;
+                }
+
+                console.log('=== calculatePlainTextOffset END (ELEMENT case) ===');
+                console.log('Final result:', plainTextOffset);
+                return plainTextOffset;
+            }
+
+            // ターゲットがテキストノードの場合（元のロジック）
+            let plainTextOffset = 0;
             let found = false;
 
             function traverse(node) {
                 if (found) return;
 
+                console.log(`Traversing node (type=${node.nodeType}):`, node.nodeType === Node.TEXT_NODE ? `"${node.textContent}"` : node.nodeName);
+
+                // ターゲットノードに到達した場合
                 if (node === targetNode) {
-                    offset += targetOffset;
+                    console.log(`Found target node! Current plainTextOffset=${plainTextOffset}, adding targetOffset=${targetOffset}`);
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        plainTextOffset += targetOffset;
+                    }
                     found = true;
+                    console.log(`Final plainTextOffset=${plainTextOffset}`);
                     return;
                 }
 
+                // ターゲットノードに到達していない場合、このノードのテキストをカウント
                 if (node.nodeType === Node.TEXT_NODE) {
-                    offset += node.textContent.length;
+                    const textLength = node.textContent.length;
+                    console.log(`Text node: adding ${textLength} chars. plainTextOffset: ${plainTextOffset} -> ${plainTextOffset + textLength}`);
+                    plainTextOffset += textLength;
                 } else if (node.nodeType === Node.ELEMENT_NODE) {
-                    // comment-iconはスキップ
-                    if (!node.classList.contains('comment-icon')) {
-                        Array.from(node.childNodes).forEach(child => traverse(child));
+                    // コメントアイコンは完全にスキップ
+                    if (node.classList && node.classList.contains('comment-icon')) {
+                        console.log('Skipping comment icon');
+                        return;
+                    }
+                    // 差分ハイライトは通過してテキストをカウント
+                    for (let child of node.childNodes) {
+                        traverse(child);
+                        if (found) return;
                     }
                 }
             }
 
-            Array.from(container.childNodes).forEach(child => traverse(child));
-            return offset;
+            for (let child of container.childNodes) {
+                traverse(child);
+                if (found) break;
+            }
+
+            console.log('=== calculatePlainTextOffset END (TEXT_NODE case) ===');
+            console.log('Final result:', plainTextOffset);
+            return plainTextOffset;
         }
 
         // コメント追加ダイアログを表示
@@ -1129,12 +1275,14 @@
             const commentAuthor = document.getElementById('commentAuthor');
             commentInput.focus();
 
-            dialog.querySelector('.cancel-btn').onclick = function() {
+            dialog.querySelector('.cancel-btn').onclick = function(e) {
+                e.stopPropagation();
                 overlay.remove();
                 dialog.remove();
             };
 
-            dialog.querySelector('.save-btn').onclick = function() {
+            dialog.querySelector('.save-btn').onclick = async function(e) {
+                e.stopPropagation();
                 const comment = commentInput.value.trim();
                 const author = commentAuthor.value;
                 if (comment) {
@@ -1148,27 +1296,44 @@
                     commentsData[entryId].sort((a, b) => a.offset - b.offset);
 
                     // 保存
-                    saveComments();
+                    await saveComments();
 
                     // 再レンダリング
                     renderEntries();
+
+                    overlay.remove();
+                    dialog.remove();
+                } else {
+                    alert('コメントを入力してください');
                 }
-                overlay.remove();
-                dialog.remove();
             };
 
-            overlay.onclick = function() {
-                overlay.remove();
-                dialog.remove();
+            overlay.onclick = function(e) {
+                // ダイアログ自体のクリックは無視
+                if (e.target === overlay) {
+                    overlay.remove();
+                    dialog.remove();
+                }
             };
         }
 
         // コメント表示/編集ダイアログ
         function showCommentDialog(entryId, commentIndex) {
+            console.log('=== showCommentDialog ===');
+            console.log('Entry ID:', entryId);
+            console.log('Comment Index:', commentIndex);
+            console.log('Comments Data:', commentsData);
+
             const comments = commentsData[entryId] || [];
-            if (commentIndex >= comments.length) return;
+            console.log('Comments for entry:', comments);
+
+            if (commentIndex >= comments.length) {
+                console.error('Comment index out of bounds!');
+                return;
+            }
 
             const commentData = comments[commentIndex];
+            console.log('Comment Data:', commentData);
             const overlay = document.createElement('div');
             overlay.className = 'comment-dialog-overlay';
 
@@ -1203,40 +1368,49 @@
             const commentAuthor = document.getElementById('commentEditAuthor');
             commentInput.focus();
 
-            dialog.querySelector('.delete-btn').onclick = function() {
+            dialog.querySelector('.delete-btn').onclick = async function(e) {
+                e.stopPropagation();
                 if (confirm('このコメントを削除しますか?')) {
                     commentsData[entryId].splice(commentIndex, 1);
                     if (commentsData[entryId].length === 0) {
                         delete commentsData[entryId];
                     }
-                    saveComments();
+                    await saveComments();
                     renderEntries();
                     overlay.remove();
                     dialog.remove();
                 }
             };
 
-            dialog.querySelector('.cancel-btn').onclick = function() {
+            dialog.querySelector('.cancel-btn').onclick = function(e) {
+                e.stopPropagation();
                 overlay.remove();
                 dialog.remove();
             };
 
-            dialog.querySelector('.save-btn').onclick = function() {
+            dialog.querySelector('.save-btn').onclick = async function(e) {
+                e.stopPropagation();
                 const newComment = commentInput.value.trim();
                 const newAuthor = commentAuthor.value;
                 if (newComment) {
                     commentsData[entryId][commentIndex].comment = newComment;
                     commentsData[entryId][commentIndex].author = newAuthor;
-                    saveComments();
+                    await saveComments();
                     renderEntries();
+
+                    overlay.remove();
+                    dialog.remove();
+                } else {
+                    alert('コメントを入力してください');
                 }
-                overlay.remove();
-                dialog.remove();
             };
 
-            overlay.onclick = function() {
-                overlay.remove();
-                dialog.remove();
+            overlay.onclick = function(e) {
+                // ダイアログ自体のクリックは無視
+                if (e.target === overlay) {
+                    overlay.remove();
+                    dialog.remove();
+                }
             };
         }
 
@@ -1274,7 +1448,7 @@
             });
 
             try {
-                // サーバーにCSVを保存
+                // サーバーにCSVとコメントを保存
                 const response = await fetch('/api/save-csv', {
                     method: 'POST',
                     headers: {
@@ -1282,7 +1456,8 @@
                     },
                     body: JSON.stringify({
                         originalPath: currentFileName,
-                        csvContent: csvContent
+                        csvContent: csvContent,
+                        commentsData: commentsData  // コメントデータも送信
                     })
                 });
 
