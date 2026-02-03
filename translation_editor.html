@@ -733,24 +733,26 @@
                         }
                     });
 
+                    // 入力イベント - プレーンテキストのみ更新
                     editableDisplay.addEventListener('input', function() {
-                        const plainText = this.innerText;
+                        // コメントアイコンを除外してプレーンテキストを取得
+                        const plainText = getPlainTextWithoutIcons(this);
                         textarea.value = plainText;
                         handleTextChange(index, plainText);
+                    });
 
-                        // 再度差分をハイライト（日本語訳とLLM翻訳の両方）
+                    // フォーカスアウト時に差分を再計算して表示
+                    editableDisplay.addEventListener('blur', function() {
+                        const plainText = getPlainTextWithoutIcons(this);
                         const llmText = llmTranslations[csvData[index].id] || '';
+
                         if (llmText) {
+                            // 差分をハイライト表示
                             let newHighlightedText = generateHighlightedDiff(llmText, plainText, 'added');
                             const newHighlightedLLMText = generateHighlightedDiff(llmText, plainText, 'removed');
 
                             // コメントアイコンを挿入
                             newHighlightedText = insertCommentIcons(newHighlightedText, csvData[index].id, plainText);
-
-                            // カーソル位置を保存
-                            const selection = window.getSelection();
-                            const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-                            const offset = range ? range.startOffset : 0;
 
                             // 編集可能な日本語訳を更新
                             this.innerHTML = newHighlightedText;
@@ -760,21 +762,13 @@
                             if (llmDisplay) {
                                 llmDisplay.innerHTML = newHighlightedLLMText;
                             }
-
-                            // カーソル位置を復元（簡易版）
-                            try {
-                                const textNode = this.firstChild;
-                                if (textNode && textNode.nodeType === Node.TEXT_NODE) {
-                                    const newRange = document.createRange();
-                                    newRange.setStart(textNode, Math.min(offset, textNode.length));
-                                    newRange.collapse(true);
-                                    selection.removeAllRanges();
-                                    selection.addRange(newRange);
-                                }
-                            } catch (e) {
-                                // カーソル位置復元に失敗した場合は無視
-                            }
                         }
+                    });
+
+                    // フォーカス時は編集しやすいようにプレーンテキストに変換
+                    editableDisplay.addEventListener('focus', function() {
+                        const plainText = getPlainTextWithoutIcons(this);
+                        this.textContent = plainText;
                     });
                 }
             });
@@ -884,6 +878,15 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        // コメントアイコンを除外してプレーンテキストを取得
+        function getPlainTextWithoutIcons(element) {
+            const cloned = element.cloneNode(true);
+            // すべてのコメントアイコンを削除
+            const icons = cloned.querySelectorAll('.comment-icon');
+            icons.forEach(icon => icon.remove());
+            return cloned.textContent || cloned.innerText || '';
         }
 
         // コメントアイコンを挿入する関数
