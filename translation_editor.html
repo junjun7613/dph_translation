@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>翻訳エディタ - DPH Translation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px 30px;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+
+        .btn-primary {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #2980b9;
+        }
+
+        .btn-success {
+            background-color: #27ae60;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background-color: #229954;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .stats {
+            background-color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 30px;
+        }
+
+        .stat-item {
+            font-size: 14px;
+        }
+
+        .stat-item strong {
+            color: #2c3e50;
+        }
+
+        .entry {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .entry-header {
+            background-color: #34495e;
+            color: white;
+            padding: 10px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .entry-id {
+            font-weight: bold;
+        }
+
+        .entry-kind {
+            background-color: #3498db;
+            padding: 3px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        .entry-body {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+            padding: 20px;
+        }
+
+        .entry-section {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .entry-section h3 {
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #2c3e50;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .entry-section .text-display {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            font-family: inherit;
+            font-size: 14px;
+            line-height: 1.6;
+            min-height: 100px;
+            overflow-y: auto;
+        }
+
+        .entry-section textarea {
+            border: 2px solid #3498db;
+            border-radius: 4px;
+            padding: 15px;
+            font-family: inherit;
+            font-size: 14px;
+            line-height: 1.6;
+            resize: vertical;
+            min-height: 100px;
+            overflow-y: auto;
+            transition: border-color 0.3s;
+        }
+
+        .entry-section textarea:focus {
+            outline: none;
+            border-color: #2980b9;
+        }
+
+        .entry-section textarea.modified {
+            border-color: #27ae60;
+            background-color: #f0fff4;
+        }
+
+        .modified-indicator {
+            display: inline-block;
+            background-color: #27ae60;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            margin-left: 10px;
+        }
+
+        .diff-highlight {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 2px 4px;
+            border-radius: 2px;
+        }
+
+        .diff-highlight-removed {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 2px 4px;
+            border-radius: 2px;
+        }
+
+        .comment-icon {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            background-color: #ffc107;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 18px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 0 2px;
+            vertical-align: middle;
+            transition: background-color 0.2s;
+        }
+
+        .comment-icon:hover {
+            background-color: #ff9800;
+        }
+
+        .add-comment-btn {
+            position: absolute;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            z-index: 1000;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .add-comment-btn:hover {
+            background-color: #1976D2;
+        }
+
+        .comment-dialog {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            border: 2px solid #3498db;
+            border-radius: 5px;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            z-index: 2000;
+            min-width: 400px;
+        }
+
+        .comment-dialog-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1999;
+        }
+
+        .comment-dialog h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+
+        .comment-dialog textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: vertical;
+        }
+
+        .comment-dialog-buttons {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .comment-dialog-buttons button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .comment-dialog-buttons .save-btn {
+            background-color: #27ae60;
+            color: white;
+        }
+
+        .comment-dialog-buttons .save-btn:hover {
+            background-color: #229954;
+        }
+
+        .comment-dialog-buttons .delete-btn {
+            background-color: #e74c3c;
+            color: white;
+        }
+
+        .comment-dialog-buttons .delete-btn:hover {
+            background-color: #c0392b;
+        }
+
+        .comment-dialog-buttons .cancel-btn {
+            background-color: #95a5a6;
+            color: white;
+        }
+
+        .comment-dialog-buttons .cancel-btn:hover {
+            background-color: #7f8c8d;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 60px;
+            color: #7f8c8d;
+        }
+
+        .no-data h2 {
+            margin-bottom: 10px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #3498db;
+        }
+
+        select {
+            padding: 10px 15px;
+            border: 2px solid #3498db;
+            border-radius: 5px;
+            font-size: 14px;
+            background-color: white;
+            cursor: pointer;
+            min-width: 250px;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #2980b9;
+        }
+
+        @media (max-width: 1200px) {
+            .entry-body {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>翻訳エディタ</h1>
+            <div class="controls">
+                <select id="folderSelect">
+                    <option value="">フォルダを選択...</option>
+                </select>
+                <select id="fileSelect" disabled>
+                    <option value="">CSVファイルを選択...</option>
+                </select>
+                <button id="loadBtn" class="btn btn-primary" disabled>読み込む</button>
+                <button id="exportBtn" class="btn btn-success" disabled>修正済みCSVを保存</button>
+            </div>
+        </div>
+        <div class="content">
+            <div class="stats" id="stats" style="display: none;">
+                <div class="stat-item">
+                    <strong>総エントリ数:</strong> <span id="totalEntries">0</span>
+                </div>
+                <div class="stat-item">
+                    <strong>修正済み:</strong> <span id="modifiedEntries">0</span>
+                </div>
+                <div class="stat-item">
+                    <strong>ファイル名:</strong> <span id="fileName">-</span>
+                </div>
+            </div>
+            <div id="entriesContainer">
+                <div class="no-data">
+                    <h2>CSVファイルを読み込んでください</h2>
+                    <p>1. フォルダを選択<br>2. CSVファイルを選択<br>3. 「読み込む」ボタンをクリック</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let csvData = [];
+        let originalData = [];
+        let llmTranslations = [];
+        let currentFileName = '';
+        let currentFolder = '';
+        let commentsData = {}; // { entry_id: [{offset, length, comment, author}] }
+        const commentAuthors = ['小川', '後藤', '原']; // コメント作成者の選択肢
+
+        const folderSelect = document.getElementById('folderSelect');
+        const fileSelect = document.getElementById('fileSelect');
+        const loadBtn = document.getElementById('loadBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        const entriesContainer = document.getElementById('entriesContainer');
+        const statsDiv = document.getElementById('stats');
+        const totalEntriesSpan = document.getElementById('totalEntries');
+        const modifiedEntriesSpan = document.getElementById('modifiedEntries');
+        const fileNameSpan = document.getElementById('fileName');
+
+        // ページ読み込み時にフォルダ一覧を取得
+        window.addEventListener('load', loadFolderList);
+
+        folderSelect.addEventListener('change', function() {
+            if (folderSelect.value) {
+                currentFolder = folderSelect.value;
+                loadCSVFileList(currentFolder);
+            } else {
+                fileSelect.disabled = true;
+                fileSelect.innerHTML = '<option value="">CSVファイルを選択...</option>';
+                loadBtn.disabled = true;
+            }
+        });
+
+        fileSelect.addEventListener('change', function() {
+            loadBtn.disabled = !fileSelect.value;
+        });
+
+        loadBtn.addEventListener('click', loadSelectedCSV);
+        exportBtn.addEventListener('click', exportCSV);
+
+        async function loadFolderList() {
+            try {
+                const response = await fetch('/api/folders');
+                const data = await response.json();
+
+                if (data.folders && data.folders.length > 0) {
+                    data.folders.forEach(foldername => {
+                        const option = document.createElement('option');
+                        option.value = foldername;
+                        option.textContent = foldername;
+                        folderSelect.appendChild(option);
+                    });
+                } else {
+                    const option = document.createElement('option');
+                    option.textContent = 'フォルダが見つかりません';
+                    option.disabled = true;
+                    folderSelect.appendChild(option);
+                }
+            } catch (error) {
+                console.error('フォルダ一覧の取得に失敗しました:', error);
+                entriesContainer.innerHTML = `
+                    <div class="no-data">
+                        <h2>エラー</h2>
+                        <p>サーバーに接続できません。</p>
+                        <p>ターミナルで <code>python3 server.py</code> を実行してサーバーを起動してください。</p>
+                    </div>
+                `;
+            }
+        }
+
+        async function loadCSVFileList(folder) {
+            fileSelect.innerHTML = '<option value="">CSVファイルを選択...</option>';
+            fileSelect.disabled = true;
+            loadBtn.disabled = true;
+
+            try {
+                const response = await fetch(`/api/csv-files/${folder}`);
+                const data = await response.json();
+
+                if (data.files && data.files.length > 0) {
+                    data.files.forEach(fileInfo => {
+                        const option = document.createElement('option');
+                        // is_originalフラグに基づいてパスを設定
+                        option.value = fileInfo.is_original ? `original/${fileInfo.name}` : fileInfo.name;
+                        option.textContent = fileInfo.display_name;
+                        fileSelect.appendChild(option);
+                    });
+                    fileSelect.disabled = false;
+                } else {
+                    const option = document.createElement('option');
+                    option.textContent = 'CSVファイルが見つかりません';
+                    option.disabled = true;
+                    fileSelect.appendChild(option);
+                }
+            } catch (error) {
+                console.error('CSVファイル一覧の取得に失敗しました:', error);
+            }
+        }
+
+        async function loadSelectedCSV() {
+            const filename = fileSelect.value;
+            if (!filename || !currentFolder) return;
+
+            const fullPath = `${currentFolder}/${filename}`;
+            currentFileName = fullPath;
+            fileNameSpan.textContent = fullPath;
+
+            entriesContainer.innerHTML = '<div class="loading">読み込み中...</div>';
+
+            try {
+                const response = await fetch(`/api/csv-content/${fullPath}`);
+                const data = await response.json();
+
+                // LLM翻訳原文をパース
+                let hasOriginal = false;
+                if (data.original_content) {
+                    parseLLMTranslations(data.original_content);
+                    hasOriginal = true;
+                } else {
+                    llmTranslations = {};
+                }
+
+                // 編集用CSVをパース
+                // originalフォルダのみ存在する場合、それを編集用としても使用
+                if (!data.csv_content && hasOriginal) {
+                    parseCSV(data.original_content);
+                } else {
+                    parseCSV(data.csv_content);
+                }
+
+                // コメントデータを読み込む
+                await loadComments(fullPath);
+
+                // 再レンダリング
+                renderEntries();
+            } catch (error) {
+                console.error('CSVファイルの読み込みに失敗しました:', error);
+                entriesContainer.innerHTML = `
+                    <div class="no-data">
+                        <h2>エラー</h2>
+                        <p>CSVファイルの読み込みに失敗しました。</p>
+                    </div>
+                `;
+            }
+        }
+
+        async function loadComments(filePath) {
+            try {
+                const response = await fetch(`/api/comments/${filePath}`);
+                const data = await response.json();
+                commentsData = data || {};
+            } catch (error) {
+                console.error('コメントデータの読み込みに失敗しました:', error);
+                commentsData = {};
+            }
+        }
+
+        async function saveComments() {
+            try {
+                const response = await fetch('/api/save-comments', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        filePath: currentFileName,
+                        commentsData: commentsData
+                    })
+                });
+
+                const result = await response.json();
+                if (!result.success) {
+                    console.error('コメントの保存に失敗しました:', result.error);
+                }
+            } catch (error) {
+                console.error('コメント保存エラー:', error);
+            }
+        }
+
+        function parseCSV(csvText) {
+            const lines = csvText.split('\n');
+            const headers = parseCSVLine(lines[0]);
+
+            csvData = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                if (lines[i].trim() === '') continue;
+
+                const values = parseCSVLine(lines[i]);
+                if (values.length >= 4) {
+                    csvData.push({
+                        id: values[0],
+                        kind: values[1],
+                        text_en: values[2],
+                        text_ja: values[3],
+                        modified: false
+                    });
+                }
+            }
+
+            originalData = JSON.parse(JSON.stringify(csvData));
+        }
+
+        function parseLLMTranslations(csvText) {
+            const lines = csvText.split('\n');
+            llmTranslations = {};
+
+            for (let i = 1; i < lines.length; i++) {
+                if (lines[i].trim() === '') continue;
+
+                const values = parseCSVLine(lines[i]);
+                if (values.length >= 4) {
+                    // IDをキーにして日本語訳を格納
+                    llmTranslations[values[0]] = values[3];
+                }
+            }
+        }
+
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                const nextChar = line[i + 1];
+
+                if (char === '"') {
+                    if (inQuotes && nextChar === '"') {
+                        current += '"';
+                        i++;
+                    } else {
+                        inQuotes = !inQuotes;
+                    }
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current);
+
+            return result;
+        }
+
+        function renderEntries() {
+            entriesContainer.innerHTML = '';
+
+            csvData.forEach((entry, index) => {
+                const entryDiv = document.createElement('div');
+                entryDiv.className = 'entry';
+
+                const kindColors = {
+                    'title': '#e74c3c',
+                    'abstract': '#9b59b6',
+                    'keyword': '#f39c12',
+                    'body': '#3498db'
+                };
+
+                const kindColor = kindColors[entry.kind] || '#95a5a6';
+
+                const llmTranslation = llmTranslations[entry.id] || '';
+
+                // 差分をハイライト表示するHTMLを生成
+                let highlightedEditedText = llmTranslation ? generateHighlightedDiff(llmTranslation, entry.text_ja, 'added') : escapeHtml(entry.text_ja);
+                const highlightedLLMText = llmTranslation ? generateHighlightedDiff(llmTranslation, entry.text_ja, 'removed') : escapeHtml(llmTranslation);
+
+                // コメントアイコンを挿入
+                highlightedEditedText = insertCommentIcons(highlightedEditedText, entry.id, entry.text_ja);
+
+                entryDiv.innerHTML = `
+                    <div class="entry-header">
+                        <div class="entry-id">ID: ${entry.id}</div>
+                        <div class="entry-kind" style="background-color: ${kindColor};">${entry.kind}</div>
+                    </div>
+                    <div class="entry-body">
+                        <div class="entry-section">
+                            <h3>英語原文</h3>
+                            <div class="text-display">${escapeHtml(entry.text_en)}</div>
+                        </div>
+                        <div class="entry-section">
+                            <h3>LLM翻訳（参考）</h3>
+                            <div class="text-display llm-translation" style="background-color: #fffbf0; border-color: #ffc107;">${highlightedLLMText}</div>
+                        </div>
+                        <div class="entry-section">
+                            <h3>
+                                日本語訳（編集可）
+                                ${entry.modified ? '<span class="modified-indicator">修正済み</span>' : ''}
+                            </h3>
+                            <textarea data-index="${index}" class="${entry.modified ? 'modified' : ''}" style="display: none;">${escapeHtml(entry.text_ja)}</textarea>
+                            <div class="text-display editable-display" data-index="${index}" contenteditable="true" style="background-color: white; cursor: text;">${highlightedEditedText}</div>
+                        </div>
+                    </div>
+                `;
+
+                entriesContainer.appendChild(entryDiv);
+
+                const textarea = entryDiv.querySelector('textarea');
+                const textDisplays = entryDiv.querySelectorAll('.text-display');
+                const editableDisplay = entryDiv.querySelector('.editable-display');
+
+                // 3つの列の最大高さを取得
+                let maxHeight = 0;
+                textDisplays.forEach(display => {
+                    maxHeight = Math.max(maxHeight, display.scrollHeight);
+                });
+
+                // すべての列を最大高さに揃える
+                textDisplays.forEach(display => {
+                    display.style.height = maxHeight + 'px';
+                });
+
+                // 編集可能なdivのイベントリスナー
+                if (editableDisplay) {
+                    // テキスト選択時のコメント追加ボタン表示
+                    editableDisplay.addEventListener('mouseup', function(e) {
+                        handleTextSelection(e, entry.id, editableDisplay);
+                    });
+
+                    // コメントアイコンのクリックイベント
+                    editableDisplay.addEventListener('click', function(e) {
+                        if (e.target.classList.contains('comment-icon')) {
+                            const commentIndex = parseInt(e.target.dataset.commentIndex);
+                            showCommentDialog(entry.id, commentIndex);
+                            e.stopPropagation();
+                        }
+                    });
+
+                    editableDisplay.addEventListener('input', function() {
+                        const plainText = this.innerText;
+                        textarea.value = plainText;
+                        handleTextChange(index, plainText);
+
+                        // 再度差分をハイライト（日本語訳とLLM翻訳の両方）
+                        const llmText = llmTranslations[csvData[index].id] || '';
+                        if (llmText) {
+                            let newHighlightedText = generateHighlightedDiff(llmText, plainText, 'added');
+                            const newHighlightedLLMText = generateHighlightedDiff(llmText, plainText, 'removed');
+
+                            // コメントアイコンを挿入
+                            newHighlightedText = insertCommentIcons(newHighlightedText, csvData[index].id, plainText);
+
+                            // カーソル位置を保存
+                            const selection = window.getSelection();
+                            const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+                            const offset = range ? range.startOffset : 0;
+
+                            // 編集可能な日本語訳を更新
+                            this.innerHTML = newHighlightedText;
+
+                            // LLM翻訳も更新
+                            const llmDisplay = entryDiv.querySelector('.llm-translation');
+                            if (llmDisplay) {
+                                llmDisplay.innerHTML = newHighlightedLLMText;
+                            }
+
+                            // カーソル位置を復元（簡易版）
+                            try {
+                                const textNode = this.firstChild;
+                                if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+                                    const newRange = document.createRange();
+                                    newRange.setStart(textNode, Math.min(offset, textNode.length));
+                                    newRange.collapse(true);
+                                    selection.removeAllRanges();
+                                    selection.addRange(newRange);
+                                }
+                            } catch (e) {
+                                // カーソル位置復元に失敗した場合は無視
+                            }
+                        }
+                    });
+                }
+            });
+
+            updateStats();
+            exportBtn.disabled = false;
+            statsDiv.style.display = 'flex';
+        }
+
+        function generateHighlightedDiff(text1, text2, highlightType) {
+            // 文字単位で差分を計算
+            const diff = computeDiff(text1, text2);
+            let html = '';
+
+            diff.forEach(part => {
+                if (highlightType === 'added') {
+                    // 日本語訳（編集可）用：追加された部分をハイライト
+                    if (part.type === 'added') {
+                        html += `<span class="diff-highlight">${escapeHtml(part.value)}</span>`;
+                    } else if (part.type === 'unchanged') {
+                        html += escapeHtml(part.value);
+                    }
+                    // removedは表示しない
+                } else if (highlightType === 'removed') {
+                    // LLM翻訳用：削除された部分をハイライト
+                    if (part.type === 'removed') {
+                        html += `<span class="diff-highlight-removed">${escapeHtml(part.value)}</span>`;
+                    } else if (part.type === 'unchanged') {
+                        html += escapeHtml(part.value);
+                    }
+                    // addedは表示しない
+                }
+            });
+
+            // htmlが空の場合
+            if (!html) {
+                return highlightType === 'added' ? escapeHtml(text2) : escapeHtml(text1);
+            }
+            return html;
+        }
+
+        function computeDiff(text1, text2) {
+            // シンプルな文字単位の差分アルゴリズム
+            const len1 = text1.length;
+            const len2 = text2.length;
+            const matrix = [];
+
+            // DP行列を初期化
+            for (let i = 0; i <= len1; i++) {
+                matrix[i] = [i];
+            }
+            for (let j = 0; j <= len2; j++) {
+                matrix[0][j] = j;
+            }
+
+            // DP行列を埋める
+            for (let i = 1; i <= len1; i++) {
+                for (let j = 1; j <= len2; j++) {
+                    if (text1[i - 1] === text2[j - 1]) {
+                        matrix[i][j] = matrix[i - 1][j - 1];
+                    } else {
+                        matrix[i][j] = Math.min(
+                            matrix[i - 1][j] + 1,    // 削除
+                            matrix[i][j - 1] + 1,    // 挿入
+                            matrix[i - 1][j - 1] + 1 // 置換
+                        );
+                    }
+                }
+            }
+
+            // バックトラックして差分を構築
+            const result = [];
+            let i = len1, j = len2;
+
+            while (i > 0 || j > 0) {
+                if (i > 0 && j > 0 && text1[i - 1] === text2[j - 1]) {
+                    result.unshift({ type: 'unchanged', value: text1[i - 1] });
+                    i--;
+                    j--;
+                } else if (j > 0 && (i === 0 || matrix[i][j - 1] <= matrix[i - 1][j])) {
+                    // 追加 (insertionを優先)
+                    result.unshift({ type: 'added', value: text2[j - 1] });
+                    j--;
+                } else if (i > 0) {
+                    // 削除
+                    result.unshift({ type: 'removed', value: text1[i - 1] });
+                    i--;
+                }
+            }
+
+            // 連続する同じタイプの文字をマージし、removed直後のaddedをまとめる
+            const merged = [];
+            for (let k = 0; k < result.length; k++) {
+                const current = result[k];
+
+                if (merged.length === 0 || merged[merged.length - 1].type !== current.type) {
+                    merged.push({ type: current.type, value: current.value });
+                } else {
+                    merged[merged.length - 1].value += current.value;
+                }
+            }
+
+            return merged;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // コメントアイコンを挿入する関数
+        function insertCommentIcons(htmlContent, entryId, plainText) {
+            const comments = commentsData[entryId] || [];
+            if (comments.length === 0) return htmlContent;
+
+            // HTMLをパースしてテキストノードとタグノードを分離
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = htmlContent;
+
+            // プレーンテキストのoffset位置を計算しながらコメントアイコンを挿入
+            let currentOffset = 0;
+            const result = [];
+
+            function processNode(node) {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    const text = node.textContent;
+                    let lastIndex = 0;
+
+                    // このテキストノード内のコメント位置を探す
+                    comments.forEach((comment, commentIndex) => {
+                        if (comment.offset >= currentOffset && comment.offset < currentOffset + text.length) {
+                            const relativeOffset = comment.offset - currentOffset;
+                            if (relativeOffset > lastIndex) {
+                                result.push(escapeHtml(text.substring(lastIndex, relativeOffset)));
+                            }
+                            const tooltipText = comment.author ? `[${comment.author}] ${comment.comment}` : comment.comment;
+                            result.push(`<span class="comment-icon" data-comment-index="${commentIndex}" title="${escapeHtml(tooltipText)}">💬</span>`);
+                            lastIndex = relativeOffset;
+                        }
+                    });
+
+                    if (lastIndex < text.length) {
+                        result.push(escapeHtml(text.substring(lastIndex)));
+                    }
+                    currentOffset += text.length;
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    result.push(`<${node.tagName.toLowerCase()}${getAttributesString(node)}>`);
+                    Array.from(node.childNodes).forEach(child => processNode(child));
+                    result.push(`</${node.tagName.toLowerCase()}>`);
+                }
+            }
+
+            function getAttributesString(node) {
+                let attrs = '';
+                Array.from(node.attributes).forEach(attr => {
+                    attrs += ` ${attr.name}="${attr.value}"`;
+                });
+                return attrs;
+            }
+
+            Array.from(tempDiv.childNodes).forEach(node => processNode(node));
+            return result.join('');
+        }
+
+        // テキスト選択時の処理
+        let addCommentBtn = null;
+        function handleTextSelection(e, entryId, editableDisplay) {
+            // 既存のボタンを削除
+            if (addCommentBtn) {
+                addCommentBtn.remove();
+                addCommentBtn = null;
+            }
+
+            const selection = window.getSelection();
+            const selectedText = selection.toString();
+
+            if (selectedText.trim().length > 0) {
+                const range = selection.getRangeAt(0);
+                const rect = range.getBoundingClientRect();
+
+                // コメント追加ボタンを表示
+                addCommentBtn = document.createElement('button');
+                addCommentBtn.className = 'add-comment-btn';
+                addCommentBtn.textContent = '💬 コメント追加';
+                addCommentBtn.style.top = `${rect.bottom + window.scrollY + 5}px`;
+                addCommentBtn.style.left = `${rect.left + window.scrollX}px`;
+
+                addCommentBtn.onclick = function() {
+                    // 選択範囲のオフセットを計算
+                    const plainText = editableDisplay.innerText;
+                    const selectionStart = getTextOffset(editableDisplay, range.startContainer, range.startOffset);
+                    const selectionEnd = getTextOffset(editableDisplay, range.endContainer, range.endOffset);
+
+                    showAddCommentDialog(entryId, selectionStart, selectionEnd - selectionStart, selectedText);
+                    addCommentBtn.remove();
+                    addCommentBtn = null;
+                    selection.removeAllRanges();
+                };
+
+                document.body.appendChild(addCommentBtn);
+            }
+        }
+
+        // DOMノードからテキストoffsetを計算
+        function getTextOffset(container, targetNode, targetOffset) {
+            let offset = 0;
+            let found = false;
+
+            function traverse(node) {
+                if (found) return;
+
+                if (node === targetNode) {
+                    offset += targetOffset;
+                    found = true;
+                    return;
+                }
+
+                if (node.nodeType === Node.TEXT_NODE) {
+                    offset += node.textContent.length;
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    // comment-iconはスキップ
+                    if (!node.classList.contains('comment-icon')) {
+                        Array.from(node.childNodes).forEach(child => traverse(child));
+                    }
+                }
+            }
+
+            Array.from(container.childNodes).forEach(child => traverse(child));
+            return offset;
+        }
+
+        // コメント追加ダイアログを表示
+        function showAddCommentDialog(entryId, offset, length, selectedText) {
+            const overlay = document.createElement('div');
+            overlay.className = 'comment-dialog-overlay';
+
+            const dialog = document.createElement('div');
+            dialog.className = 'comment-dialog';
+
+            const authorOptions = commentAuthors.map(author =>
+                `<option value="${escapeHtml(author)}">${escapeHtml(author)}</option>`
+            ).join('');
+
+            dialog.innerHTML = `
+                <h3>コメントを追加</h3>
+                <p><strong>選択テキスト:</strong> "${escapeHtml(selectedText)}"</p>
+                <div style="margin-bottom: 10px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold;">作成者:</label>
+                    <select id="commentAuthor" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px; font-size: 14px;">
+                        ${authorOptions}
+                    </select>
+                </div>
+                <textarea id="commentInput" placeholder="コメントを入力してください..."></textarea>
+                <div class="comment-dialog-buttons">
+                    <button class="cancel-btn">キャンセル</button>
+                    <button class="save-btn">保存</button>
+                </div>
+            `;
+
+            document.body.appendChild(overlay);
+            document.body.appendChild(dialog);
+
+            const commentInput = document.getElementById('commentInput');
+            const commentAuthor = document.getElementById('commentAuthor');
+            commentInput.focus();
+
+            dialog.querySelector('.cancel-btn').onclick = function() {
+                overlay.remove();
+                dialog.remove();
+            };
+
+            dialog.querySelector('.save-btn').onclick = function() {
+                const comment = commentInput.value.trim();
+                const author = commentAuthor.value;
+                if (comment) {
+                    // コメントを追加
+                    if (!commentsData[entryId]) {
+                        commentsData[entryId] = [];
+                    }
+                    commentsData[entryId].push({ offset, length, comment, author });
+
+                    // コメントをoffset順にソート
+                    commentsData[entryId].sort((a, b) => a.offset - b.offset);
+
+                    // 保存
+                    saveComments();
+
+                    // 再レンダリング
+                    renderEntries();
+                }
+                overlay.remove();
+                dialog.remove();
+            };
+
+            overlay.onclick = function() {
+                overlay.remove();
+                dialog.remove();
+            };
+        }
+
+        // コメント表示/編集ダイアログ
+        function showCommentDialog(entryId, commentIndex) {
+            const comments = commentsData[entryId] || [];
+            if (commentIndex >= comments.length) return;
+
+            const commentData = comments[commentIndex];
+            const overlay = document.createElement('div');
+            overlay.className = 'comment-dialog-overlay';
+
+            const dialog = document.createElement('div');
+            dialog.className = 'comment-dialog';
+
+            const authorOptions = commentAuthors.map(author => {
+                const selected = author === commentData.author ? 'selected' : '';
+                return `<option value="${escapeHtml(author)}" ${selected}>${escapeHtml(author)}</option>`;
+            }).join('');
+
+            dialog.innerHTML = `
+                <h3>コメント</h3>
+                <div style="margin-bottom: 10px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold;">作成者:</label>
+                    <select id="commentEditAuthor" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px; font-size: 14px;">
+                        ${authorOptions}
+                    </select>
+                </div>
+                <textarea id="commentEditInput">${escapeHtml(commentData.comment)}</textarea>
+                <div class="comment-dialog-buttons">
+                    <button class="delete-btn">削除</button>
+                    <button class="cancel-btn">キャンセル</button>
+                    <button class="save-btn">更新</button>
+                </div>
+            `;
+
+            document.body.appendChild(overlay);
+            document.body.appendChild(dialog);
+
+            const commentInput = document.getElementById('commentEditInput');
+            const commentAuthor = document.getElementById('commentEditAuthor');
+            commentInput.focus();
+
+            dialog.querySelector('.delete-btn').onclick = function() {
+                if (confirm('このコメントを削除しますか?')) {
+                    commentsData[entryId].splice(commentIndex, 1);
+                    if (commentsData[entryId].length === 0) {
+                        delete commentsData[entryId];
+                    }
+                    saveComments();
+                    renderEntries();
+                    overlay.remove();
+                    dialog.remove();
+                }
+            };
+
+            dialog.querySelector('.cancel-btn').onclick = function() {
+                overlay.remove();
+                dialog.remove();
+            };
+
+            dialog.querySelector('.save-btn').onclick = function() {
+                const newComment = commentInput.value.trim();
+                const newAuthor = commentAuthor.value;
+                if (newComment) {
+                    commentsData[entryId][commentIndex].comment = newComment;
+                    commentsData[entryId][commentIndex].author = newAuthor;
+                    saveComments();
+                    renderEntries();
+                }
+                overlay.remove();
+                dialog.remove();
+            };
+
+            overlay.onclick = function() {
+                overlay.remove();
+                dialog.remove();
+            };
+        }
+
+        function handleTextChange(index, newValue) {
+            csvData[index].text_ja = newValue;
+            csvData[index].modified = (newValue !== originalData[index].text_ja);
+
+            const textarea = document.querySelector(`textarea[data-index="${index}"]`);
+            if (csvData[index].modified) {
+                textarea.classList.add('modified');
+            } else {
+                textarea.classList.remove('modified');
+            }
+
+            updateStats();
+        }
+
+        function updateStats() {
+            totalEntriesSpan.textContent = csvData.length;
+            const modifiedCount = csvData.filter(entry => entry.modified).length;
+            modifiedEntriesSpan.textContent = modifiedCount;
+        }
+
+        async function exportCSV() {
+            let csvContent = 'id,kind,text_en,text_ja\n';
+
+            csvData.forEach(entry => {
+                const row = [
+                    entry.id,
+                    escapeCSVField(entry.kind),
+                    escapeCSVField(entry.text_en),
+                    escapeCSVField(entry.text_ja)
+                ];
+                csvContent += row.join(',') + '\n';
+            });
+
+            try {
+                // サーバーにCSVを保存
+                const response = await fetch('/api/save-csv', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        originalPath: currentFileName,
+                        csvContent: csvContent
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert(`ファイルが保存されました:\n${result.filename}\n\n保存先: data/${result.path}`);
+                } else {
+                    throw new Error(result.error || '保存に失敗しました');
+                }
+            } catch (error) {
+                console.error('保存エラー:', error);
+                alert(`保存に失敗しました: ${error.message}`);
+            }
+        }
+
+        function escapeCSVField(field) {
+            const fieldStr = String(field);
+            if (fieldStr.includes(',') || fieldStr.includes('"') || fieldStr.includes('\n')) {
+                return '"' + fieldStr.replace(/"/g, '""') + '"';
+            }
+            return fieldStr;
+        }
+    </script>
+</body>
+</html>
